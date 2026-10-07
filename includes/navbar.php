@@ -19,7 +19,7 @@ $curPage = basename($_SERVER['PHP_SELF'], '.php');
       <a href="<?= BASE_URL ?>/pages/package-builder.php" class="nav-link text-sm font-medium text-white/80 hover:text-secondary transition-colors">Custom Builder</a>
       <a href="<?= BASE_URL ?>/pages/hotels.php"          class="nav-link text-sm font-medium text-white/80 hover:text-secondary transition-colors">Hotels</a>
       <a href="<?= BASE_URL ?>/pages/transport.php"       class="nav-link text-sm font-medium text-white/80 hover:text-secondary transition-colors">Transport</a>
-      <a href="<?= BASE_URL ?>/pages/special-deals.php"   class="nav-link text-sm font-medium text-white/80 hover:text-secondary transition-colors">Deals</a>
+      <a href="<?= BASE_URL ?>/pages/umrah-simulator.php"   class="nav-link text-sm font-medium text-white/80 hover:text-secondary transition-colors">Simulator</a>
       <div class="relative group">
         <button class="text-sm font-medium text-white/80 hover:text-secondary transition-colors flex items-center gap-1">
           More <i data-lucide="chevron-down" class="w-4 h-4"></i>
@@ -28,6 +28,7 @@ $curPage = basename($_SERVER['PHP_SELF'], '.php');
           <a href="<?= BASE_URL ?>/pages/hajj.php"          class="block px-4 py-3 text-sm text-white/80 hover:text-secondary hover:bg-white/5 transition-colors">Hajj Packages</a>
           <a href="<?= BASE_URL ?>/pages/group-booking.php" class="block px-4 py-3 text-sm text-white/80 hover:text-secondary hover:bg-white/5 transition-colors">Group Booking</a>
           <a href="<?= BASE_URL ?>/pages/contact.php"       class="block px-4 py-3 text-sm text-white/80 hover:text-secondary hover:bg-white/5 transition-colors">Contact</a>
+          <a href="<?= BASE_URL ?>/pages/special-deals.php"       class="block px-4 py-3 text-sm text-white/80 hover:text-secondary hover:bg-white/5 transition-colors">Deals</a>
           <div class="border-t border-white/10 mt-1"></div>
           <a href="<?= BASE_URL ?>/pages/visa-guide.php"    class="block px-4 py-3 text-sm text-white/80 hover:text-secondary hover:bg-white/5 transition-colors">Visa Guide</a>
           <a href="<?= BASE_URL ?>/pages/help-center.php"   class="block px-4 py-3 text-sm text-white/80 hover:text-secondary hover:bg-white/5 transition-colors">Help Center</a>
