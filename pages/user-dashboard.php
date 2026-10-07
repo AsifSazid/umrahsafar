@@ -49,7 +49,7 @@ include dirname(__DIR__) . '/includes/header.php';
         <h3 class="font-bold mb-4 flex items-center gap-2"><i data-lucide="search" class="w-4 h-4 text-secondary"></i> Track Booking (Guest)</h3>
         <div id="lookup-msg" class="hidden mb-3 px-3 py-2 rounded-lg text-xs font-medium"></div>
         <div class="flex gap-2">
-          <input type="text" id="lookup-ref" placeholder="Enter booking ref (THR-BK-...)" class="input-field flex-1">
+          <input type="text" id="lookup-ref" placeholder="Enter ref (US9-26-CBS-... / BKS-...)" class="input-field flex-1">
           <button onclick="lookupBooking()" class="btn-primary px-4 py-3 text-sm font-bold shrink-0">Track</button>
         </div>
         <div id="lookup-result" class="hidden mt-4"></div>
@@ -282,12 +282,12 @@ async function lookupBooking() {
         <div class="flex gap-4 text-xs text-white/40">
           <span>${b.adults} Adults</span>
           ${b.total_price_bdt ? `<span class="text-secondary font-bold">৳${parseInt(b.total_price_bdt).toLocaleString()}</span>` : ''}
-          <span>${new Date(b.created_at).toLocaleDateString('en-BD',{day:'numeric',month:'short',year:'numeric'})}</span>
+          ${b.created_at ? `<span>${new Date(b.created_at.replace(' ','T')).toLocaleDateString('en-BD',{day:'numeric',month:'short',year:'numeric'})}</span>` : ''}
         </div>
       </div>
-      <a href="<?= BASE_URL ?>/pages/booking-preview.php?ref=${encodeURIComponent(b.booking_ref)}" class="btn-primary w-full py-2.5 text-sm font-bold flex items-center justify-center gap-2">
+      ${b.preview_url ? `<a href="${b.preview_url}" class="btn-primary w-full py-2.5 text-sm font-bold flex items-center justify-center gap-2">
         <i data-lucide="eye" class="w-4 h-4"></i> View Full Details
-      </a>
+      </a>` : ''}
     </div>`;
     resultEl.classList.remove('hidden');
     msgEl.classList.add('hidden');
