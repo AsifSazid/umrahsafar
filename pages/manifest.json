@@ -1,0 +1,10 @@
+{
+  "name": "Umrah Safar - TravHub Global Limited",
+  "short_name": "Umrah Safar",
+  "description": "Umrah simulator with step-by-step guide in Bangla and English",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#16130E",
+  "theme_color": "#C9A54C",
+  "orientation": "any"
+}
