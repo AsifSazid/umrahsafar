@@ -13,31 +13,127 @@ const store = {
   del(k) { try { localStorage.removeItem('umrahsafar:' + k); } catch (e) { } }
 };
 
-/* ===== AUDIO (Web Speech API) ===== */
+/* ===== AUDIO ===== */
+// Strategy: ResponsiveVoice (best Arabic quality, audio cached by SW for offline)
+//           → Web Speech API fallback (device-dependent, always available)
 let currentUtterance = null;
+let arabicVoice = null;
+let _rvReady = false;
+
+function _pickArabicVoice() {
+  if (!('speechSynthesis' in window)) return;
+  const voices = window.speechSynthesis.getVoices();
+  arabicVoice = voices.find(v => v.lang === 'ar-SA') ||
+                voices.find(v => v.lang === 'ar-EG') ||
+                voices.find(v => v.lang.startsWith('ar')) ||
+                null;
+}
+if ('speechSynthesis' in window) {
+  _pickArabicVoice();
+  window.speechSynthesis.onvoiceschanged = _pickArabicVoice;
+}
+
+// Wait for ResponsiveVoice to load (it's deferred)
+window.responsiveVoiceButtonHidden = true; // hide default RV button
+window.addEventListener('load', () => {
+  if (window.responsiveVoice) {
+    try { responsiveVoice.init(); } catch (e) {}
+    _rvReady = true;
+  }
+});
+
+function _rvAvailable() {
+  // voiceSupport() returns false in Chrome (no built-in Arabic voice) — skip that check.
+  // We just need RV object loaded; errors are handled via onerror callback in speak().
+  if (window.responsiveVoice && !_rvReady) {
+    try { responsiveVoice.init(); } catch (e) {}  // lazy init if load event missed
+    _rvReady = true;
+  }
+  return _rvReady && !!window.responsiveVoice;
+}
+
 function stopAudio() {
+  _rvPlayId++;  // invalidate any in-flight onend/onerror callbacks
+  if (_rvAvailable()) try { responsiveVoice.cancel(); } catch (e) {}
   if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   currentUtterance = null;
   document.querySelectorAll('.dua-audio').forEach(b => {
     b.classList.remove('playing');
     b.textContent = '▶ ' + (lang === 'bn' ? 'শুনুন' : 'Listen');
+    delete b.dataset.playing;
   });
 }
+
+/* Web Speech API fallback — gender-aware pitch */
+function _wsSpeakArabic(text, onDone) {
+  if (!('speechSynthesis' in window)) {
+    if (typeof window._toastFn === 'function') window._toastFn(lang === 'bn' ? 'এই ব্রাউজারে অডিও সাপোর্ট নেই' : 'Audio not supported in this browser', 'warn');
+    onDone(); return;
+  }
+  _pickArabicVoice();
+  // Chrome often has no Arabic voice — attempt anyway; onerror fires silently if unsupported
+  const isMale = (store.get('gender') || window._gender || 'm') !== 'f';
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = arabicVoice ? arabicVoice.lang : 'ar-SA';
+  if (arabicVoice) utt.voice = arabicVoice;
+  utt.rate = arabicVoice ? (isMale ? 0.65 : 0.75) : (isMale ? 0.60 : 0.68);
+  utt.pitch = isMale ? 0.70 : 1.10;
+  utt.onend = onDone;
+  utt.onerror = onDone;
+  currentUtterance = utt;
+  window.speechSynthesis.speak(utt);
+}
+
+/* Pick RV voice name by gender (m → Male, f → Female) */
+function _rvVoiceName() {
+  // store.get('gender') is set immediately on load from localStorage;
+  // window._gender is updated by game.js but may lag at startup — so prefer store.
+  const g = store.get('gender') || window._gender || 'm';
+  return g === 'f' ? 'Arabic Female' : 'Arabic Male';
+}
+
+let _rvPlayId = 0;  // increments on every play; stop increments it too → stale callbacks ignored
+
 function playDua(key, btn) {
-  stopAudio();
-  if (btn.dataset.playing) { btn.dataset.playing = ''; return; }
-  if (!('speechSynthesis' in window)) return;
-  const utt = new SpeechSynthesisUtterance(DUA[key].ar);
-  utt.lang = 'ar-SA'; utt.rate = 0.82; utt.pitch = 1;
-  utt.onend = () => {
-    btn.classList.remove('playing');
-    btn.textContent = '▶ ' + (lang === 'bn' ? 'শুনুন' : 'Listen');
-    btn.dataset.playing = '';
-  };
+  // If this button is already playing → stop only, don't restart
+  if (btn.dataset.playing) {
+    stopAudio();
+    return;
+  }
+
+  stopAudio();  // stop any OTHER dua that's playing
+
+  const text = DUA[key].ar;
+  const myId = ++_rvPlayId;  // unique id for this play session
+
   btn.classList.add('playing');
   btn.textContent = '⏹ ' + (lang === 'bn' ? 'বন্ধ করুন' : 'Stop');
   btn.dataset.playing = '1';
-  window.speechSynthesis.speak(utt);
+
+  const resetBtn = () => {
+    if (_rvPlayId !== myId) return;  // stale callback after stop/cancel — ignore
+    btn.classList.remove('playing');
+    btn.textContent = '▶ ' + (lang === 'bn' ? 'শুনুন' : 'Listen');
+    delete btn.dataset.playing;
+    currentUtterance = null;
+  };
+
+  // ResponsiveVoice — Arabic Female works well; Arabic Male may not be available on
+  // free API key, so for male we try RV first and fall through to WS on any error.
+  if (_rvAvailable()) {
+    const voiceName = _rvVoiceName();
+    responsiveVoice.speak(text, voiceName, {
+      rate: voiceName === 'Arabic Male' ? 0.85 : 0.9,
+      pitch: 1,
+      volume: 1,
+      onend: resetBtn,
+      onerror: () => { if (_rvPlayId === myId) _wsSpeakArabic(text, resetBtn); }
+    });
+    return;
+  }
+
+  // Fallback: Web Speech API
+  _wsSpeakArabic(text, resetBtn);
 }
 
 /* ===== DUA HTML ===== */
@@ -92,10 +188,10 @@ if ('serviceWorker' in navigator) {
 }
 
 /* ===== SIDE PANEL ===== */
-const TOOL_TABS = ['checklist', 'ihram', 'glossary', 'mistakes', 'calc', 'madinah', 'compare', 'settings'];
+const TOOL_TABS = ['checklist', 'ihram', 'glossary', 'mistakes', 'calc', 'prayer', 'madinah', 'compare', 'settings'];
 const TOOL_LABELS = {
-  en: { checklist: 'Packing', ihram: 'Ihram Guide', glossary: 'Glossary', mistakes: 'Mistakes', calc: 'Distance', madinah: 'Madinah', compare: 'Umrah vs Hajj', settings: 'Settings' },
-  bn: { checklist: 'পোটলা', ihram: 'ইহরাম গাইড', glossary: 'পরিভাষা', mistakes: 'সাধারণ ভুল', calc: 'দূরত্ব', madinah: 'মদিনা', compare: 'উমরাহ বনাম হজ', settings: 'সেটিংস' }
+  en: { checklist: 'Packing', ihram: 'Ihram Guide', glossary: 'Glossary', mistakes: 'Mistakes', calc: 'Distance', prayer: 'Prayer Times', madinah: 'Madinah', compare: 'Umrah vs Hajj', settings: 'Settings' },
+  bn: { checklist: 'পোটলা', ihram: 'ইহরাম গাইড', glossary: 'পরিভাষা', mistakes: 'সাধারণ ভুল', calc: 'দূরত্ব', prayer: 'নামাজের ওয়াক্ত', madinah: 'মদিনা', compare: 'উমরাহ বনাম হজ', settings: 'সেটিংস' }
 };
 
 function openTools() {
@@ -132,6 +228,7 @@ function renderTab(key) {
     case 'glossary':  return renderGlossary();
     case 'mistakes':  return renderMistakes();
     case 'calc':      return renderCalc();
+    case 'prayer':    return renderPrayerTimes();
     case 'madinah':   return renderMadinah();
     case 'compare':   return renderCompare();
     case 'settings':  return renderSettings();
@@ -148,6 +245,16 @@ function afterTabRender(key) {
   if (key === 'calc') {
     const btn = document.getElementById('calcBtn');
     if (btn) btn.addEventListener('click', doCalc);
+  }
+  if (key === 'prayer') {
+    if (!prayerTimesData) {
+      fetchPrayerTimes().then(data => {
+        if (data && document.getElementById('sideBody')) {
+          document.getElementById('sideBody').innerHTML = `<section class="active">${renderPrayerTimes()}</section>`;
+        }
+      });
+    }
+    if (store.get('prayerReminder') === '1') startPrayerReminder();
   }
   if (key === 'settings') {
     document.querySelectorAll('.fs-opt').forEach(b => {
@@ -292,6 +399,108 @@ function doCalc() {
     }</div>`;
 }
 
+/* ===== PRAYER TIMES ===== */
+const PRAYER_KEYS = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+const PRAYER_NAMES = {
+  en: { Fajr: 'Fajr', Sunrise: 'Sunrise', Dhuhr: 'Dhuhr', Asr: 'Asr', Maghrib: 'Maghrib', Isha: 'Isha' },
+  bn: { Fajr: 'ফজর', Sunrise: 'সূর্যোদয়', Dhuhr: 'যোহর', Asr: 'আসর', Maghrib: 'মাগরিব', Isha: 'ইশা' }
+};
+let prayerTimesData = null;
+let _prayerCheckInterval = null;
+let _lastPrayerRemind = '';
+
+async function fetchPrayerTimes() {
+  try {
+    const res = await fetch('https://api.aladhan.com/v1/timingsByCity?city=Makkah&country=SA&method=4');
+    const json = await res.json();
+    if (json.code === 200) { prayerTimesData = json.data.timings; return prayerTimesData; }
+  } catch (e) {}
+  return null;
+}
+
+function renderPrayerTimes() {
+  let html = `<p style="font-size:var(--fs-sm);color:var(--ink-2);margin:0 0 12px">
+    ${lang === 'bn' ? '🕌 আজকের নামাজের ওয়াক্ত — মক্কা মুকাররমা' : '🕌 Today\'s prayer times — Makkah al-Mukarramah'}
+  </p>`;
+  if (!prayerTimesData) {
+    html += `<div style="text-align:center;padding:24px;color:var(--ink-2)">${lang === 'bn' ? 'লোড হচ্ছে...' : 'Loading...'}</div>`;
+  } else {
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const nextKey = PRAYER_KEYS.filter(k => {
+      const [h, m] = (prayerTimesData[k] || '00:00').split(':').map(Number);
+      return h * 60 + m > nowMin;
+    })[0] || '';
+    html += `<div class="prayer-list">`;
+    for (const key of PRAYER_KEYS) {
+      const timeStr = (prayerTimesData[key] || '--:--').substring(0, 5);
+      const [h, m] = timeStr.split(':').map(Number);
+      const pMin = h * 60 + m;
+      const isPast = pMin < nowMin;
+      const isNext = key === nextKey;
+      html += `<div class="prayer-row${isNext ? ' prayer-next' : isPast ? ' prayer-past' : ''}">
+        <span class="prayer-name">${esc(PRAYER_NAMES[lang][key])}</span>
+        <span class="prayer-time">${esc(timeStr)}</span>
+        ${isNext ? `<span class="prayer-badge">${lang === 'bn' ? 'পরবর্তী' : 'Next'}</span>` : ''}
+      </div>`;
+    }
+    html += `</div>`;
+    const reminderOn = store.get('prayerReminder') === '1';
+    html += `<div style="margin-top:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:var(--fs-sm);color:var(--ink-2)">${lang === 'bn' ? '৫ মিনিট আগে মনে করিয়ে দাও' : 'Remind 5 min before'}</span>
+      <button class="night-mode-btn${reminderOn ? ' active' : ''}" id="prayerReminderBtn" onclick="togglePrayerReminder(this)">
+        ${reminderOn ? (lang === 'bn' ? '✓ চালু' : '✓ On') : (lang === 'bn' ? 'বন্ধ' : 'Off')}
+      </button>
+    </div>`;
+  }
+  html += `<button class="btn" style="margin-top:14px;font-size:var(--fs-sm)" onclick="refreshPrayerTab()">
+    ${lang === 'bn' ? '↻ রিফ্রেশ' : '↻ Refresh'}
+  </button>`;
+  return html;
+}
+
+function togglePrayerReminder(btn) {
+  const on = store.get('prayerReminder') !== '1';
+  store.set('prayerReminder', on ? '1' : '0');
+  btn.classList.toggle('active', on);
+  btn.textContent = on ? (lang === 'bn' ? '✓ চালু' : '✓ On') : (lang === 'bn' ? 'বন্ধ' : 'Off');
+  if (on) startPrayerReminder(); else stopPrayerReminder();
+}
+
+async function refreshPrayerTab() {
+  prayerTimesData = null;
+  const body = document.getElementById('sideBody');
+  if (body) body.innerHTML = `<section class="active">${renderPrayerTimes()}</section>`;
+  const data = await fetchPrayerTimes();
+  if (data && document.getElementById('sideBody'))
+    document.getElementById('sideBody').innerHTML = `<section class="active">${renderPrayerTimes()}</section>`;
+}
+
+function startPrayerReminder() {
+  stopPrayerReminder();
+  _prayerCheckInterval = setInterval(() => {
+    if (store.get('prayerReminder') !== '1' || !prayerTimesData) return;
+    const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
+    for (const key of ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']) {
+      const [h, m] = (prayerTimesData[key] || '00:00').split(':').map(Number);
+      const diff = h * 60 + m - nowMin;
+      if (diff >= 4 && diff <= 5 && _lastPrayerRemind !== key + now.getDate()) {
+        _lastPrayerRemind = key + now.getDate();
+        const name = PRAYER_NAMES[lang][key];
+        if (window._toastFn) window._toastFn(`🕌 ${lang === 'bn' ? name + ' নামাজের ৫ মিনিট বাকি' : name + ' prayer in 5 minutes'}`, 'ok');
+      }
+    }
+  }, 30000);
+}
+function stopPrayerReminder() {
+  if (_prayerCheckInterval) { clearInterval(_prayerCheckInterval); _prayerCheckInterval = null; }
+}
+
+/* Start reminder on load if previously enabled */
+if (store.get('prayerReminder') === '1') {
+  fetchPrayerTimes().then(d => { if (d) startPrayerReminder(); });
+}
+
 /* ===== MADINAH ===== */
 function renderMadinah() {
   const places = MADINAH[lang];
@@ -346,13 +555,25 @@ function renderSettings() {
         ${lang === 'bn' ? 'শেয়ার করুন' : 'Share Progress'}
       </button>
     </div>
-    <div>
-      <div class="calc-label" style="margin-bottom:8px">${lang === 'bn' ? 'ডেটা মুছুন' : 'Reset data'}</div>
-      <button class="btn" onclick="if(confirm('${lang === 'bn' ? 'সব তথ্য মুছে দেবেন?' : 'Reset all data?'}')){localStorage.clear();location.reload()}">
-        ${lang === 'bn' ? 'সব মুছুন' : 'Clear all data'}
-      </button>
-    </div>
   </div>`;
+}
+
+/* ===== LIGHTWEIGHT MODE TOGGLE ===== */
+function toggleLightMode(btn) {
+  const on = store.get('lightMode') !== '1';
+  store.set('lightMode', on ? '1' : '0');
+  btn.classList.toggle('active', on);
+  btn.textContent = on ? (lang === 'bn' ? '⚡ চালু' : '⚡ On') : (lang === 'bn' ? 'বন্ধ' : 'Off');
+  if (typeof window.applyLightweight === 'function') window.applyLightweight(on);
+}
+
+/* ===== NIGHT MODE TOGGLE ===== */
+function toggleNightMode(btn) {
+  const on = store.get('nightMode') !== '1';
+  store.set('nightMode', on ? '1' : '0');
+  btn.classList.toggle('active', on);
+  btn.textContent = on ? (lang === 'bn' ? '🌙 চালু' : '🌙 On') : (lang === 'bn' ? '☀️ বন্ধ' : '☀️ Off');
+  if (typeof setNightMode === 'function') setNightMode(on);
 }
 
 /* ===== LANG SWITCH (called by game.js) ===== */

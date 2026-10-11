@@ -15,9 +15,41 @@ catch (e) { loadMsg.textContent = 'WebGL not supported.'; throw e; }
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isTouch ? 1.5 : 1.75));
 const world = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1400);
-world.add(new THREE.HemisphereLight(0xfff6e6, 0xb5a78e, 0.7));
+const hemiLight = new THREE.HemisphereLight(0xfff6e6, 0xb5a78e, 0.7);
+world.add(hemiLight);
 const sun = new THREE.DirectionalLight(0xffffff, 0.62);
 sun.position.set(-60, 120, 45); world.add(sun);
+
+/* ===== NIGHT MODE ===== */
+let nightMode = (store.get('nightMode') === '1');
+window._nightMode = nightMode;
+const fillLight = new THREE.PointLight(0x7090ff, 0, 60);
+fillLight.position.set(0, 20, 0);
+world.add(fillLight);
+function setNightMode(on) {
+  nightMode = on; window._nightMode = on;
+  store.set('nightMode', on ? '1' : '0');
+  hemiLight.color.set(on ? 0x1e2a5a : 0xfff6e6);
+  hemiLight.groundColor.set(on ? 0x0e1428 : 0xb5a78e);
+  hemiLight.intensity = on ? 0.22 : 0.7;
+  sun.color.set(on ? 0x4060b0 : 0xffffff);
+  sun.intensity = on ? 0.10 : 0.62;
+  fillLight.intensity = on ? 0.45 : 0;
+  if (cur) cur.setNight(on);
+  const nb = document.getElementById('nightBtn');
+  if (nb) nb.textContent = on ? '🌙' : '☀️';
+}
+window.setNightMode = setNightMode;
+
+/* ===== LIGHTWEIGHT MODE ===== */
+const _BASE_PX = Math.min(window.devicePixelRatio || 1, isTouch ? 1.5 : 1.75);
+window.applyLightweight = (on) => {
+  renderer.setPixelRatio(on ? 1.0 : _BASE_PX);
+  _mapTick = on ? 0.12 : 0.05;
+  if (cur && !nightMode) {
+    world.fog = on ? new THREE.Fog(0xefe3cc, 100, 350) : new THREE.Fog(0xefe3cc, 220, 780);
+  }
+};
 
 function resize() { const w = window.innerWidth, h = window.innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 window.addEventListener('resize', resize);
@@ -37,7 +69,7 @@ const lerpAngle = (a, b, k) => a + wrapPi(b - a) * k;
 function t(k, vars) {
   const STR_GAME = {
     en: {
-      brand: 'Umrah Safar', now: 'Now', move: 'Move', auto: 'Auto-walk', run: 'Walk briskly', help: 'Controls',
+      brand: 'Umrah Safar', now: 'Now', move: 'Move', auto: 'Auto-walk', run: 'Walk fast', help: 'Controls',
       cont: 'Continue', close: 'Close', learn: 'Tap to read about it', nearby: 'You are near',
       c_tawaf: 'Tawaf round', c_sai: "Sa'i lap", place_safa: 'Safa', place_marwa: 'Marwa',
       gateNo: 'Gate {n}', yourGate: 'Your gate', mapLabel: 'Map', steps_ihram: 'Ihram',
@@ -131,12 +163,13 @@ function t(k, vars) {
       view_45: 'Coming out of Gate 45, the Clock Tower is behind you.',
       view_100: 'Coming out of Gate 100, Jarwal road is ahead left.',
       ctrlTitle: 'Controls',
-      ctrlDesk: 'Move with W A S D or arrow keys. Hold Shift or Walk briskly for Raml. Press E for the gold action button. Drag to look around, scroll to zoom.',
+      ctrlDesk: 'Move with W A S D or arrow keys. Hold Shift or click Walk fast for Raml. Press E for the gold action button. Drag to look around, scroll to zoom.',
       ctrlTouch: 'Put your left thumb on the left side to move. Drag on the right to look around, pinch to zoom.',
       ctrlAuto: 'Auto-walk takes you along the correct route.',
       performAs: 'Who is performing Umrah?', man: 'Man', woman: 'Woman',
       manNote: 'Includes Idtiba, Raml and jogging between the green lights',
       womanNote: 'Walks at a normal pace throughout',
+      yourName: 'Nickname (one word)', namePh: 'one word / nickname', nameSave: 'Save',
       begin: 'Begin with Ihram', title: 'Umrah Safar Simulator',
       sub: 'Walk the real route from your hotel to the Kaaba, then perform every step of Umrah.',
       disclaimer: 'This is a learning aid. Follow your scholar or group guide on the details.',
@@ -246,6 +279,7 @@ function t(k, vars) {
       performAs: 'কে উমরাহ করছেন?', man: 'পুরুষ', woman: 'নারী',
       manNote: 'ইযতিবা, রমল এবং সবুজ বাতির মাঝে হালকা দৌড়সহ',
       womanNote: 'পুরো সময় স্বাভাবিক গতিতে হাঁটা',
+      yourName: 'নিকনেম (এক শব্দ)', namePh: 'এক শব্দে / নিকনেম', nameSave: 'সংরক্ষণ',
       begin: 'ইহরাম দিয়ে শুরু করুন', title: 'উমরাহ সফর সিমুলেটর',
       sub: 'হোটেল থেকে কাবা পর্যন্ত বাস্তব পথ ধরে হেঁটে যান, তারপর মসজিদুল হারামে উমরাহর প্রতিটি ধাপ পালন করুন।',
       disclaimer: 'এটি একটি শেখার সহায়ক। আপনার আলেম বা গ্রুপ গাইডের নির্দেশনা মেনে চলুন।',
@@ -275,6 +309,7 @@ for (const k of ROUTE_KEYS) {
   R.units = u; R.scale = R.km * 1000 / u;
   const a = GATE_ANG[R.no]; R.inn = [polar(52, a), polar(40.5, a), polar(34, a)];
 }
+// Route guides player eastward from mosque interior (near Zamzam) to the Masaa corridor (Safa end)
 const SAFA_ROUTE = [polar(35.5, A_SAFA), polar(41, A_SAFA), polar(52, A_SAFA), polar(66, A_SAFA), { x: 66.5, z: 34.5 }, { x: 70, z: 40.5 }];
 
 /* ===== STATE ===== */
@@ -286,7 +321,7 @@ const S = {
   tw: null, sai: null, prayer: null, talb: 0, camSnap: true, walked: 0
 };
 const P = { pos: new THREE.Vector3(0, 0, 30), yaw: Math.PI, moving: false, running: false, runHeld: false, stuck: 0, autoR: null };
-const cam = { yaw: 0, pitch: 0.36, dist: 11, lastUser: -10 };
+const cam = { yaw: 0, pitch: 0.36, dist: 11, lastUser: -10, fpv: false };
 const pose = { bend: 0, sy: 1 }, poseT = { bend: 0, sy: 1 };
 let T = 0, cur = null;
 
@@ -303,7 +338,90 @@ window._toastFn = null;
   const gn = parseInt(store.get('gateNo') || '0'); if (gn) S.gateNo = gn;
   S.walked = parseInt(store.get('walked') || '0') || 0;
   S.talb = parseInt(store.get('talb') || '0') || 0;
+  window._gender = S.gender; // sync after loading saved gender
 })();
+
+/* ===== PLAYER NAME ===== */
+let playerName = store.get('playerName') || '';
+window._playerName = playerName;
+function setPlayerName(n) {
+  playerName = (n || '').trim().slice(0, 20);
+  window._playerName = playerName;
+  store.set('playerName', playerName);
+  updateNameTag();
+}
+/* Name-tag sprite — created after world loads, updated every frame */
+let nameTagSprite = null;
+function buildNameTag() {
+  if (nameTagSprite) { world.remove(nameTagSprite); nameTagSprite.material.map.dispose(); nameTagSprite.material.dispose(); }
+  if (!playerName) { nameTagSprite = null; return; }
+  // Canvas: measure text first, then size canvas to fit snugly
+  const BH = 56, TAIL = 22;
+  const fs = 26; // fixed font size
+  // Measure on a temp canvas
+  const _tc = document.createElement('canvas').getContext('2d');
+  _tc.font = `bold ${fs}px "Hind Siliguri",system-ui,sans-serif`;
+  const textW = _tc.measureText(playerName).width;
+  const PAD_X = 22; // horizontal padding each side (tight)
+  const CW = Math.ceil(textW + PAD_X * 2 + BH); // +BH accounts for pill end caps
+  const CH = BH + TAIL;
+  const c = document.createElement('canvas'); c.width = CW; c.height = CH;
+  const g = c.getContext('2d');
+  const BORDER_GREEN = '#1a5c1a';
+  // Pill radius = 50% of bubble height
+  const r = BH / 2;
+  // Draw pill bubble
+  g.fillStyle = 'rgba(26,92,26,0.6)';
+  g.beginPath();
+  g.moveTo(r, 0); g.lineTo(CW - r, 0);
+  g.arc(CW - r, r, r, -Math.PI/2, Math.PI/2);
+  g.lineTo(r, BH);
+  g.arc(r, r, r, Math.PI/2, -Math.PI/2);
+  g.closePath(); g.fill();
+  // Border
+  g.strokeStyle = BORDER_GREEN; g.lineWidth = 3;
+  g.beginPath();
+  g.moveTo(r, 0); g.lineTo(CW - r, 0);
+  g.arc(CW - r, r, r, -Math.PI/2, Math.PI/2);
+  g.lineTo(r, BH);
+  g.arc(r, r, r, Math.PI/2, -Math.PI/2);
+  g.closePath(); g.stroke();
+  // Tail (triangle pointing down at bottom center)
+  // Draw fill first so it covers the bottom pill border, then stroke only outer edges
+  const tx = CW / 2;
+  g.fillStyle = 'rgba(26,92,26,0.6)';
+  g.beginPath(); g.moveTo(tx - 11, BH); g.lineTo(tx + 11, BH); g.lineTo(tx, CH); g.closePath(); g.fill();
+  // Stroke only the two outer sides (not the top, which sits on pill bottom)
+  g.strokeStyle = BORDER_GREEN; g.lineWidth = 2.5; g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(tx - 11, BH); g.lineTo(tx, CH); g.lineTo(tx + 11, BH); g.stroke();
+  // Text
+  g.font = `bold ${fs}px "Hind Siliguri",system-ui,sans-serif`;
+  g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(playerName, CW / 2, BH / 2);
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.SpriteMaterial({ map: tex, depthWrite: false, transparent: true, fog: false });
+  nameTagSprite = new THREE.Sprite(mat);
+  // World width proportional to text width (min 0.7, max 1.8)
+  const ww = Math.min(1.8, Math.max(0.7, CW / 220));
+  nameTagSprite.scale.set(ww, ww * CH / CW, 1);
+  nameTagSprite.visible = false; // shown only in follow mode
+  world.add(nameTagSprite);
+}
+function updateNameTag() {
+  buildNameTag();
+}
+function tickNameTag() {
+  if (!nameTagSprite) return;
+  nameTagSprite.visible = (S.mode === 'follow') && !!playerName;
+  if (nameTagSprite.visible) {
+    // Tail tip should be ~0.25 units above head top (~1.85 units)
+    // Sprite bottom = position.y - sprH/2 = tail tip world pos
+    // So: position.y = tailTipY + sprH/2
+    const sprH = nameTagSprite.scale.y;
+    const tailTipY = 2.18; // well above the head sphere
+    nameTagSprite.position.set(P.pos.x, tailTipY + sprH / 2, P.pos.z);
+  }
+}
 
 const inMasa = p => p.x > MX0 - 0.3 && p.x < MX1 + 0.3 && p.z > MZN - 2 && p.z < MZS + 2;
 const gateName = no => GATES[no].n[lang];
@@ -396,8 +514,8 @@ function renderSteps() {
 stepsEl.addEventListener('click', e => { const b = e.target.closest('[data-jump]'); if (!b || S.fading) return; S.talb = 0; goTo(b.dataset.jump); });
 
 /* ===== CARDS ===== */
-function showCard(builder) { S.cardBuilder = builder; S.modal = true; modal.hidden = false; renderCard(true); }
-function closeCard() { S.cardBuilder = null; S.modal = false; modal.hidden = true; }
+function showCard(builder) { if (typeof stopAudio === 'function') stopAudio(); S.cardBuilder = builder; S.modal = true; modal.hidden = false; renderCard(true); }
+function closeCard() { if (typeof stopAudio === 'function') stopAudio(); S.cardBuilder = null; S.modal = false; modal.hidden = true; }
 function renderCard(focus) {
   const spec = S.cardBuilder(); cardEl.className = 'card' + (spec.cls ? ' ' + spec.cls : '');
   cardK.textContent = spec.kicker || ''; cardK.hidden = !spec.kicker;
@@ -418,8 +536,16 @@ const opt = (attr, val, on, title, note) => `<button class="opt" data-${attr}="$
 const cardIntro = () => ({ cls: 'intro', title: t('title'),
   html: `<p class="lead">${esc(t('sub'))}</p>${segBtns()}<p class="q">${esc(t('performAs'))}</p><div class="choice">` +
     ['m','f'].map(g => opt('gender', g, S.gender===g, t(g==='m'?'man':'woman'), t(g==='m'?'manNote':'womanNote'))).join('') +
-    `</div><p class="fine">${esc(t('disclaimer'))}</p>`,
-  buttons: [{ label: t('begin'), primary: true, fn: () => goTo('ihram') }] });
+    `</div><div class="name-row"><label class="name-lbl">${esc(t('yourName'))}</label><input class="name-inp" id="playerNameInp" type="text" maxlength="12" placeholder="${esc(t('namePh'))}" value="${esc(playerName)}"></div><p class="fine">${esc(t('disclaimer'))}</p>`,
+  buttons: [{ label: t('begin'), primary: true, fn: () => { const inp = document.getElementById('playerNameInp'); if (inp) setPlayerName(inp.value.replace(/\s+/g, '')); goTo('ihram'); } }],
+  after: () => {
+    const inp = document.getElementById('playerNameInp');
+    if (inp) {
+      // Strip spaces on input (enforce single word)
+      inp.oninput = () => { inp.value = inp.value.replace(/\s+/g, ''); };
+    }
+  }
+});
 const cardIhram1 = () => ({ kicker: t('steps_ihram'), title: t('c_ih1_t'),
   html: P_(t(S.gender==='m' ? 'c_ih1_m' : 'c_ih1_f')) + NOTE(t('c_flight')),
   buttons: [{ label: t('cont'), primary: true, fn: () => showCard(cardIhram2) }] });
@@ -481,7 +607,7 @@ const PH_SPAWN = {
   approach:   () => ROUTES[S.route].start,
   tawaf_start:() => ({ x: 0, z: 30, yaw: Math.PI }),
   maqam:      () => { const p = polar(12.5, A0 + 0.08); return { x: p.x, z: p.z, yaw: Math.PI }; },
-  zamzam:     () => ({ x: PRAY_SPOT.x, z: PRAY_SPOT.z, yaw: 0 }),
+  zamzam:     () => { const p = polar(21.5, 0.30); return { x: p.x, z: p.z, yaw: -0.30 }; },
   to_safa:    () => ({ x: ZAMZAM_WP.x, z: ZAMZAM_WP.z, yaw: Math.PI }),
   sai_safa:   () => ({ x: SAFA_PT.x,   z: SAFA_PT.z,   yaw: Math.PI }),
   halq:       () => ({ x: MARWA_PT.x,  z: MARWA_PT.z + 1, yaw: 0 }),
@@ -530,7 +656,7 @@ function setPhase(ph) {
       S.tw = { prevA: angleOf(P.pos.x, P.pos.z), cum:0, max:0, rounds:0, lastWarn:-9, istUntil:0, dist:0 };
       counterEl.hidden = false; break;
     case 'maqam':    S.target = PRAY_SPOT; S.targetR = 2.0; if (S.gender === 'm') toast(esc(t('t_cover'))); break;
-    case 'zamzam':   S.target = ZAMZAM_WP; S.targetR = 2.0; break;
+    case 'zamzam':   S.target = ZAMZAM_WP; S.targetR = 6.0; break;
     case 'to_safa':  S.routePts = SAFA_ROUTE; S.targetR = 2.5; break;
     case 'sai_safa': S.target = SAFA_PT; S.targetR = 3; break;
     case 'sai':      S.sai = { lap:0, heading:'marwa', dhikr:null, dist:0 }; counterEl.hidden = false; break;
@@ -808,20 +934,38 @@ function updateGuides() {
 }
 
 /* ===== CAMERA ===== */
-let camLookUp = 0;
+let camLookUp = 0, _camFracTick = 0, _mapTick = 0;
 const head = new THREE.Vector3(), desired = new THREE.Vector3(), probe = new THREE.Vector3(), look = new THREE.Vector3(), dir = new THREE.Vector3();
 function camDir(yaw, out) { const cp = Math.cos(cam.pitch); return out.set(Math.sin(yaw)*cp, Math.sin(cam.pitch), Math.cos(yaw)*cp); }
 function camFrac(yaw) {
-  camDir(yaw, dir); const steps = 18;
+  camDir(yaw, dir); const steps = 8;
   for (let i = 1; i <= steps; i++) { probe.copy(dir).multiplyScalar(cam.dist * i / steps).add(head); if (!cur.camOK(probe)) return Math.max(0.12, (i-1)/steps - 0.02); }
   return 1;
 }
 function updateCamera(dt) {
   if (S.mode === 'orbit') { const a = T * 0.045; camera.position.set(Math.cos(a)*31, 17, Math.sin(a)*31); camera.lookAt(0,5,0); S.camSnap = true; return; }
+
+  /* ── FPV (First Person View) ── */
+  if (cam.fpv) {
+    camera.position.set(P.pos.x, 1.65, P.pos.z);
+    const fpvYaw = P.moving ? P.yaw : (cam.lastUser > T - 2 ? cam.yaw - Math.PI : P.yaw);
+    const pitch = clamp(cam.pitch, -0.4, 0.6);
+    look.set(
+      P.pos.x + Math.sin(fpvYaw) * Math.cos(pitch),
+      1.65 + Math.sin(pitch),
+      P.pos.z + Math.cos(fpvYaw) * Math.cos(pitch)
+    );
+    camera.lookAt(look);
+    S.camSnap = false;
+    return;
+  }
+
+  /* ── TPV (Third Person View, default) ── */
   if ((P.moving || S.prayer) && T - cam.lastUser > 1.6) cam.yaw = lerpAngle(cam.yaw, P.yaw + Math.PI, 1 - Math.exp(-dt * (S.prayer ? 2.5 : 1.5)));
   head.set(P.pos.x, 1.6, P.pos.z);
+  _camFracTick++;
   let f = camFrac(cam.yaw);
-  if (f < 0.5 && T - cam.lastUser > 1.0) {
+  if (f < 0.5 && T - cam.lastUser > 1.0 && _camFracTick % 3 === 0) {
     let best = 0, bf = f;
     for (const o of [0.6,-0.6,1.2,-1.2,1.8,-1.8,2.4,-2.4]) { const ff = camFrac(cam.yaw + o); if (ff > bf + 0.12) { bf = ff; best = o; } }
     if (best) { cam.yaw = S.camSnap ? cam.yaw + best : lerpAngle(cam.yaw, cam.yaw + best, 1 - Math.exp(-dt*4)); f = camFrac(cam.yaw); }
@@ -829,7 +973,7 @@ function updateCamera(dt) {
   camDir(cam.yaw, desired); desired.multiplyScalar(cam.dist * f).add(head);
   if (S.camSnap) { camera.position.copy(desired); S.camSnap = false; } else camera.position.lerp(desired, 1 - Math.exp(-dt*10));
   let lookUp = 0;
-  if (S.phase === 'approach') { const g = polar(R_OUT, GATE_ANG[ROUTES[S.route].no]), d = Math.hypot(P.pos.x - g.x, P.pos.z - g.z); lookUp = clamp((40-d)/30, 0, 1) * 4.5; }
+  if (S.phase === 'approach') { const g = polar(R_OUT, GATE_ANG[ROUTES[S.route].no]), d = Math.hypot(P.pos.x - g.x, P.pos.z - g.z); lookUp = clamp((40-d)/30, 0, 1) * 1.2; }
   camLookUp = lerp(camLookUp, lookUp, 1 - Math.exp(-dt*3));
   look.set(P.pos.x, 3.0 + camLookUp - (1 - pose.sy)*1.5, P.pos.z); camera.lookAt(look);
 }
@@ -841,7 +985,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyE' && !S.modal && S.actionFn && !S.locked) S.actionFn();
 });
 window.addEventListener('keyup', e => K.delete(e.code));
-window.addEventListener('blur', () => { K.clear(); P.runHeld = false; runBtn.classList.remove('held'); });
+window.addEventListener('blur', () => { K.clear(); });
 const ptrs = new Map();
 canvas.addEventListener('pointerdown', e => {
   canvas.setPointerCapture(e.pointerId);
@@ -861,7 +1005,7 @@ canvas.addEventListener('pointermove', e => {
     const other = [...ptrs.entries()].find(([id]) => id !== e.pointerId)[1];
     const before = Math.hypot(pp.x-other.x, pp.y-other.y), after = Math.hypot(e.clientX-other.x, e.clientY-other.y);
     if (after > 0) cam.dist = clamp(cam.dist * before/after, 4, 18);
-  } else { cam.yaw -= (e.clientX-pp.x)*0.006; cam.pitch = clamp(cam.pitch+(e.clientY-pp.y)*0.004, 0.08, 1.25); cam.lastUser = T; }
+  } else { cam.yaw -= (e.clientX-pp.x)*0.006; cam.pitch = clamp(cam.pitch+(e.clientY-pp.y)*0.004, 0.08, 0.85); cam.lastUser = T; }
   pp.x = e.clientX; pp.y = e.clientY;
 });
 const endPtr = e => { if (joy.active && e.pointerId===joy.id) { joy.active=false; joy.x=joy.y=0; joyEl.hidden=true; joyHint.hidden=!(S.mode==='follow'&&isTouch); } ptrs.delete(e.pointerId); };
@@ -870,12 +1014,60 @@ canvas.addEventListener('wheel', e => { e.preventDefault(); cam.dist = clamp(cam
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 actBtn.addEventListener('click', () => { if (S.actionFn && !S.modal && !S.locked) S.actionFn(); });
 autoBtn.addEventListener('click', () => { S.auto = !S.auto; P.autoR = null; P.stuck = 0; autoBtn.setAttribute('aria-pressed', String(S.auto)); });
-const runOn = e => { e.preventDefault(); P.runHeld = true; runBtn.classList.add('held'); };
-const runOff = () => { P.runHeld = false; runBtn.classList.remove('held'); };
-runBtn.addEventListener('pointerdown', runOn); runBtn.addEventListener('pointerup', runOff); runBtn.addEventListener('pointerleave', runOff); runBtn.addEventListener('pointercancel', runOff);
-runBtn.addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'Enter') runOn(e); });
-runBtn.addEventListener('keyup', runOff);
+runBtn.addEventListener('click', () => {
+  P.runHeld = !P.runHeld;
+  runBtn.classList.toggle('held', P.runHeld);
+  runBtn.setAttribute('aria-pressed', String(P.runHeld));
+});
 document.getElementById('helpBtn').addEventListener('click', () => { if (!S.modal) showCard(cardHelp); });
+
+/* ── Clear All Data ── */
+const clearBtn = document.getElementById('clearBtn');
+if (clearBtn) {
+  clearBtn.addEventListener('click', () => {
+    const msg = lang === 'bn' ? 'সব তথ্য মুছে দেবেন?' : 'Reset all data?';
+    if (confirm(msg)) { localStorage.clear(); location.reload(); }
+  });
+}
+
+/* ── Camera toggle (TPV ↔ FPV) ── */
+const camBtn = document.getElementById('camBtn');
+if (camBtn) {
+  camBtn.addEventListener('click', () => {
+    cam.fpv = !cam.fpv;
+    camBtn.textContent = cam.fpv ? 'FPV' : 'TPV';
+    camBtn.classList.toggle('active', cam.fpv);
+    if (!cam.fpv) { cam.pitch = 0.36; cam.dist = 11; S.camSnap = true; }
+  });
+}
+
+/* ── Night mode toggle (topbar shortcut) ── */
+const nightBtn = document.getElementById('nightBtn');
+if (nightBtn) {
+  nightBtn.textContent = nightMode ? '🌙' : '☀️';
+  nightBtn.classList.toggle('active', nightMode);
+  nightBtn.addEventListener('click', () => {
+    const on = !nightMode;
+    setNightMode(on);
+    nightBtn.classList.toggle('active', on);
+  });
+}
+
+/* ── Lightweight mode toggle (topbar shortcut) ── */
+const lightBtn = document.getElementById('lightBtn');
+if (lightBtn) {
+  const _lmOn = () => store.get('lightMode') === '1';
+  lightBtn.classList.toggle('active', _lmOn());
+  lightBtn.addEventListener('click', () => {
+    const on = !_lmOn();
+    store.set('lightMode', on ? '1' : '0');
+    lightBtn.classList.toggle('active', on);
+    if (typeof window.applyLightweight === 'function') window.applyLightweight(on);
+    // sync panel button if open
+    const pb = document.getElementById('lightModeBtn');
+    if (pb) { pb.classList.toggle('active', on); pb.textContent = on ? (lang === 'bn' ? '⚡ চালু' : '⚡ On') : (lang === 'bn' ? 'বন্ধ' : 'Off'); }
+  });
+}
 document.querySelectorAll('.langs [data-lang]').forEach(b => b.addEventListener('click', () => setLang(b.dataset.lang)));
 window.addEventListener('resize', () => { mapPx = 0; });
 
@@ -903,15 +1095,16 @@ function setLang(l) {
 let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now; T += dt;
+  const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000)); last = now; T += dt;
   if (!cur) return;
   const follow = S.mode === 'follow', active = follow && !S.modal && !S.locked && !S.fading;
   if (active) updatePlayer(dt); else P.moving = false;
   if (S.prayer) prayerTick(dt);
   if (follow) animateAvatar(dt);
+  tickNameTag();
   cur.update(dt, T);
   if (active) phaseTick();
-  updateGuides(); updateCamera(dt); drawMap();
+  updateGuides(); updateCamera(dt); if ((_mapTick -= dt) <= 0) { _mapTick = 0.05; drawMap(); }
   if (follow && (distTick -= dt) <= 0) { distTick = 0.2; renderDist(); }
   renderer.render(world, camera);
 }
@@ -928,7 +1121,10 @@ async function init() {
   cur = buildWorld(world, isTouch);
   world.add(cur.group); world.background = cur.bg; world.fog = cur.fog;
   world.add(AV.m.root, AV.f.root, arrow, wp);
+  buildNameTag();   // create sprite if name already saved
   setLang(lang);
+  if (nightMode) setNightMode(true);
+  if (store.get('lightMode') === '1') window.applyLightweight(true);
   const savedPhase = S.phase;
   if (savedPhase && savedPhase !== 'intro') goTo(savedPhase);
   else setPhase('intro');

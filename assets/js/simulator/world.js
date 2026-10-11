@@ -321,14 +321,16 @@ function buildWorld(scene, isTouch) {
   add(zz, new THREE.BoxGeometry(5.2, 0.9, 1.1), lam(0xd9d4c8), 0, 0.45, 0);
   for (const k of [-1.8, -0.6, 0.6, 1.8]) { add(zz, new THREE.CylinderGeometry(0.32, 0.32, 1.0, 16), MAT.silver, k, 1.4, 0); }
   const zs = signSprite('زمزم', 'Zamzam', 4.2); zs.position.set(0, 3.3, 0); zz.add(zs);
-  const tg = { x: -Math.sin(0.30), z: -Math.cos(0.30) };
-  sc.circles.push({ x: ZAMZAM_POS.x + tg.x * 1.4, z: ZAMZAM_POS.z + tg.z * 1.4, r: 1.3 });
+  // Box collision for the full zamzam counter (5.2 wide × 1.1 deep, rotated 0.30+π/2).
+  // AABB approximation with generous padding so player can't clip through any side.
+  sc.boxes.push({ x0: ZAMZAM_POS.x - 1.5, x1: ZAMZAM_POS.x + 1.5, z0: ZAMZAM_POS.z - 3.0, z1: ZAMZAM_POS.z + 3.0 });
+  sc.cboxes.push({ x0: ZAMZAM_POS.x - 1.5, x1: ZAMZAM_POS.x + 1.5, z0: ZAMZAM_POS.z - 3.0, z1: ZAMZAM_POS.z + 3.0, h: 2.5 });
 
   /* Colonnade */
   const NC = 72, RC = 37.4, colGeo = new THREE.CylinderGeometry(0.4, 0.46, 4.4, 10); colGeo.translate(0, 2.2, 0);
   const colTh = []; for (let i = 0; i < NC; i++) { const th = i / NC * TAU; if (!openingAt(RC, th - Math.PI / 2, 0.9)) colTh.push(th); }
   const cols = new THREE.InstancedMesh(colGeo, lam(0xefe8da), colTh.length);
-  colTh.forEach((th, i) => { const x = RC * Math.sin(th), z = RC * Math.cos(th); mm.makeTranslation(x, 0, z); cols.setMatrixAt(i, mm); sc.circles.push({ x, z, r: 0.46, cam: true }); });
+  colTh.forEach((th, i) => { const x = RC * Math.sin(th), z = RC * Math.cos(th); mm.makeTranslation(x, 0, z); cols.setMatrixAt(i, mm); sc.circles.push({ x, z, r: 0.60, cam: true }); });
   G.add(cols);
   add(G, new THREE.CylinderGeometry(RC, RC, 3.0, NC * 2, 1, true), lam(0xffffff, { map: archBand(NC), alphaTest: .5, side: THREE.DoubleSide }), 0, 5.6, 0);
   add(G, new THREE.RingGeometry(RC - 0.5, R_IN, 144, 1).rotateX(-Math.PI / 2), lam(0xd9ccb3, { side: THREE.DoubleSide }), 0, 7.1, 0);
@@ -365,7 +367,7 @@ function buildWorld(scene, isTouch) {
     const tan = { x: Math.cos(th), z: -Math.sin(th) }, out = { x: Math.sin(th), z: Math.cos(th) };
     for (const s of [-1, 1]) {
       add(g, new THREE.BoxGeometry(2.6, 15, 3.2), MAT.stoneDark, s * (hw + 1.3), 7.5, 1.0);
-      sc.circles.push({ x: p.x + tan.x * s * (hw + 1.3) + out.x * 1.0, z: p.z + tan.z * s * (hw + 1.3) + out.z * 1.0, r: 1.7 });
+      sc.circles.push({ x: p.x + tan.x * s * (hw + 1.3) + out.x * 1.0, z: p.z + tan.z * s * (hw + 1.3) + out.z * 1.0, r: 2.0 });
       const mn = minaret(72, 1.05), q = polar(R_OUT + 7, a + s * 0.17); mn.position.set(q.x, 0, q.z); G.add(mn);
       sc.boxes.push({ x0: q.x - 2.3, x1: q.x + 2.3, z0: q.z - 2.3, z1: q.z + 2.3 });
       sc.cboxes.push({ x0: q.x - 2.3, x1: q.x + 2.3, z0: q.z - 2.3, z1: q.z + 2.3, h: 90 });
@@ -447,8 +449,10 @@ function buildWorld(scene, isTouch) {
   for (let i = 0; i < 4; i++) add(ct, new THREE.PlaneGeometry(15, 15), cf, 10.1 * Math.sin(i * Math.PI / 2), 113, 10.1 * Math.cos(i * Math.PI / 2)).rotation.y = i * Math.PI / 2;
   add(ct, new THREE.CylinderGeometry(6, 8.5, 10, 8), lam(0xe9e2d0), 0, 131, 0);
   add(ct, new THREE.ConeGeometry(3, 32, 8), MAT.gold, 0, 152, 0);
-  /* Jabal Omar */
-  for (let z = -44; z < 44; z += 22) { bld(-200, -100 + hr() * 10, z, z + 18, 60 + hr() * 55, 0, hr() < .5 ? glassM : null); }
+  /* Jabal Omar — buildings on N/S sides of road (road: z=1, hw=7 → corridor z=-6 to z+8; clear zone z=-14 to z+12) */
+  for (const [z0, z1] of [[-42, -28], [-26, -14], [12, 24], [26, 38]]) {
+    bld(-200, -110 + hr() * 8, z0, z1, 60 + hr() * 55, 0, hr() < .5 ? glassM : null);
+  }
   /* Jarwal */
   const jA = A_G62, jd = { x: Math.cos(jA), z: -Math.sin(jA) }, jn = { x: -jd.z, z: jd.x };
   for (let r2 = 104; r2 < 206; r2 += 21) for (const s2 of [-1, 1]) {
@@ -532,9 +536,41 @@ function buildWorld(scene, isTouch) {
   sc.update = (dt, T) => {
     const _o = { x: 0, z: 0 };
     const dodge = (x, z) => { const dx = x - window._px, dz = z - window._pz, d2 = dx * dx + dz * dz; if (d2 < 0.8 && d2 > 1e-6) { const d = Math.sqrt(d2), k = (0.9 - d) / d; x += dx * k; z += dz * k; } return { x, z }; };
+
+    /* ── Spatial grid for NPC-NPC separation ─────────────────────────────
+       Cell size 2.5 units; only run every other frame (toggle _gridFrame).
+       Buckets built from outC agents; mat tawaf agents are on fixed radii
+       so only need player-dodge + wall push (done above). masa agents are
+       on a narrow corridor — only separate within corridor each frame.    */
+    const CELL = 2.5, INV_CELL = 1 / CELL;
+    const _gridBuckets = new Map();
+    const _cellKey = (x, z) => `${Math.floor(x * INV_CELL)},${Math.floor(z * INV_CELL)}`;
+    const _addToBucket = (key, i) => { if (!_gridBuckets.has(key)) _gridBuckets.set(key, []); _gridBuckets.get(key).push(i); };
+    /* Build grid from outC agents */
+    outC.agents.forEach((a, i) => _addToBucket(_cellKey(a.x, a.z), i));
+    /* Apply NPC-NPC separation for outC */
+    const SEP_R = 1.1, SEP_R2 = SEP_R * SEP_R;
+    const _separateOutC = (a, i) => {
+      const cx = Math.floor(a.x * INV_CELL), cz = Math.floor(a.z * INV_CELL);
+      for (let nx = cx - 1; nx <= cx + 1; nx++) for (let nz = cz - 1; nz <= cz + 1; nz++) {
+        const nb = _gridBuckets.get(`${nx},${nz}`); if (!nb) continue;
+        for (const j of nb) { if (j === i) continue;
+          const b = outC.agents[j], dx = a.x - b.x, dz = a.z - b.z, d2 = dx * dx + dz * dz;
+          if (d2 < SEP_R2 && d2 > 1e-6) { const d = Math.sqrt(d2), push = (SEP_R - d) * 0.5 / d; a.x += dx * push; a.z += dz * push; }
+        }
+      }
+    };
+
     for (let i = 0; i < NM; i++) {
       const a = mat.agents[i]; a.ang += a.w * dt;
-      let { x, z } = dodge(kw(0, 0).x + a.rad * Math.cos(a.ang), kw(0, 0).z - a.rad * Math.sin(a.ang));
+      let { x, z } = dodge(a.rad * Math.cos(a.ang), -a.rad * Math.sin(a.ang));
+      /* Push NPC away from Maqam Ibrahim dome */
+      const _mp = { x, z }; pushCircle(_mp, { x: MAQAM_POS.x, z: MAQAM_POS.z, r: 2.2 }, 0.5); x = _mp.x; z = _mp.z;
+      /* Push NPC away from Kaaba walls + Hijr in local space */
+      const _l = kl(x, z);
+      pushBox(_l, { x0: -KW / 2 - 0.5, x1: KW / 2 + 0.5, z0: -KD / 2 - 0.5, z1: KD / 2 + 0.5 }, 1.0);
+      if (_l.x > KW / 2) { const A = HIJR_A + 1.0, B = HIJR_B + 1.0, ex = (_l.x - KW / 2) / A, ez = _l.z / B, k = Math.hypot(ex, ez); if (k < 1 && k > 1e-6) { _l.x = KW / 2 + ex / k * A; _l.z = ez / k * B; } }
+      const _ww = kw(_l.x, _l.z); x = _ww.x; z = _ww.z;
       mat.set(i, x, z, Math.atan2(-Math.sin(a.ang), -Math.cos(a.ang)), Math.abs(Math.sin(T * 5.5 + a.ph)) * 0.05);
     }
     mat.commit();
@@ -542,13 +578,21 @@ function buildWorld(scene, isTouch) {
       const tgt = a.kind === 'p' ? a.pts[a.i] : a.t, dx = tgt.x - a.x, dz = tgt.z - a.z, d = Math.hypot(dx, dz);
       if (d < 0.8) { if (a.kind === 'p') { a.i++; if (a.i >= a.pts.length) { a.i = 1; a.x = a.pts[0].x; a.z = a.pts[0].z; } } else a.t = wanderPt(angleOf(a.x, a.z)); return; }
       a.x += dx / d * a.v * dt; a.z += dz / d * a.v * dt;
+      _separateOutC(a, i);   // NPC-NPC separation
       const { x, z } = dodge(a.x, a.z); outC.set(i, x, z, Math.atan2(dx, dz), Math.abs(Math.sin(T * 5.5 + a.ph)) * 0.05);
     });
     outC.commit();
+    /* Masa NPC-NPC separation — simple O(n²) over small corridor crowd */
+    const MSEP = 1.0, MSEP2 = MSEP * MSEP;
     masa.agents.forEach((a, i) => {
       const fast = !a.female && a.z > GZ0 && a.z < GZ1;
       a.z += a.dir * a.v * (fast ? 1.9 : 1) * dt;
       if (a.z < MZN + 1.5 || a.z > MZS - 1.5) { a.dir *= -1; a.x += a.dir < 0 ? -7.2 : 7.2; a.x = clamp(a.x, 63.4, 76.6); a.z = clamp(a.z, MZN + 1.5, MZS - 1.5); }
+      /* separate from nearby masa agents */
+      for (let j = i + 1; j < NMASA; j++) {
+        const b = masa.agents[j], ddx = a.x - b.x, ddz = a.z - b.z, d2 = ddx * ddx + ddz * ddz;
+        if (d2 < MSEP2 && d2 > 1e-6) { const d = Math.sqrt(d2), push = (MSEP - d) * 0.5 / d; a.x += ddx * push; b.x -= ddx * push; a.x = clamp(a.x, 63.4, 76.6); b.x = clamp(b.x, 63.4, 76.6); }
+      }
       const { x, z } = dodge(a.x, a.z);
       masa.set(i, x, z, a.dir > 0 ? 0 : Math.PI, Math.abs(Math.sin(T * (fast ? 9 : 5.5) + a.ph)) * 0.05);
     });
@@ -571,6 +615,96 @@ function buildWorld(scene, isTouch) {
     for (const c of sc.circles) pushCircle(p, c, 0.45);
     if (!walkable(p.x, p.z)) { if (walkable(p.x, prev.z)) p.z = prev.z; else if (walkable(prev.x, p.z)) p.x = prev.x; else { p.x = prev.x; p.z = prev.z; } }
   };
+  /* ===== NIGHT MODE ELEMENTS ===== */
+  const starGeo = new THREE.BufferGeometry();
+  const starPos = new Float32Array(800 * 3);
+  for (let si = 0; si < 800; si++) {
+    const theta = Math.random() * TAU, phi = Math.acos(1 - Math.random() * 0.65), r = 650;
+    starPos[si*3]   = r * Math.sin(phi) * Math.cos(theta);
+    starPos[si*3+1] = Math.abs(r * Math.cos(phi)) + 60;
+    starPos[si*3+2] = r * Math.sin(phi) * Math.sin(theta);
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+  const starsMat = new THREE.PointsMaterial({ color: 0xeef0ff, size: 2.5, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false });
+  const stars = new THREE.Points(starGeo, starsMat);
+  stars.frustumCulled = false;
+  G.add(stars);
+
+  const moon = new THREE.Mesh(
+    new THREE.SphereGeometry(14, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xfffbe0, fog: false })
+  );
+  moon.position.set(-220, 380, -300); moon.visible = false; G.add(moon);
+
+  const lamps = [];
+  for (let li = 0; li < 12; li++) {
+    const la = (li / 12) * TAU, lamp = new THREE.PointLight(0xfffff0, 0, 42); // ivory-white
+    lamp.position.set(Math.cos(la) * 58, 9, Math.sin(la) * 58);
+    G.add(lamp); lamps.push(lamp);
+  }
+
+  /* Interior overhead ring — off at night (replaced by ground/colonnade lights) */
+  const iLamps = [];
+  for (let li = 0; li < 8; li++) {
+    const la = (li / 8) * TAU, iLamp = new THREE.PointLight(0xfffff0, 0, 28); // ivory-white
+    iLamp.position.set(Math.cos(la) * 33, 6, Math.sin(la) * 33);
+    G.add(iLamp); iLamps.push(iLamp);
+  }
+
+  /* Ground-wash lights — low y=0.3, around Kaaba, ivory-white, short range */
+  const floorLamps = [];
+  const floorRad = [18, 20, 19, 21, 18.5, 20.5, 19.5, 21.5];
+  for (let li = 0; li < 8; li++) {
+    const la = (li / 8) * TAU, fl = new THREE.PointLight(0xfffff0, 0, 15); // ivory-white
+    fl.position.set(Math.cos(la) * floorRad[li], 0.3, Math.sin(la) * floorRad[li]);
+    G.add(fl); floorLamps.push(fl);
+  }
+
+  /* Colonnade accent lights — pillar-base level, ivory-white, short range */
+  const arcadeLamps = [];
+  for (let li = 0; li < 12; li++) {
+    const la = (li / 12) * TAU, al = new THREE.PointLight(0xfffff0, 0, 12); // ivory-white
+    al.position.set(Math.cos(la) * 44, 1.5, Math.sin(la) * 44);
+    G.add(al); arcadeLamps.push(al);
+  }
+
+  /* Road ground-wash — ivory-white PointLights every 20 units along each road, y=0.3 */
+  const roadGroundLights = [];
+  for (const r of ROADS) {
+    const dx = r.x2 - r.x1, dz = r.z2 - r.z1, L = Math.hypot(dx, dz);
+    for (let d = 8; d < L - 8; d += 20) {
+      const rl = new THREE.PointLight(0xfffff0, 0, 20);
+      rl.position.set(r.x1 + dx * d / L, 0.3, r.z1 + dz * d / L);
+      G.add(rl); roadGroundLights.push(rl);
+    }
+  }
+
+  /* Kaaba wall-wash night lights — one per face, placed 4 units out, y=2 */
+  const kaabaNightLights = [];
+  [
+    kw(0, KD / 2 + 4),       // South face (door side)
+    kw(0, -(KD / 2 + 4)),    // North face
+    kw(KW / 2 + 4, 0),       // East face (Hijr side)
+    kw(-(KW / 2 + 4), 0),    // West face (Black Stone side)
+  ].forEach(p => {
+    const kl = new THREE.PointLight(0xfffff0, 0, 14);
+    kl.position.set(p.x, 2.0, p.z);
+    G.add(kl); kaabaNightLights.push(kl);
+  });
+
+  sc.setNight = (on) => {
+    scene.fog = on ? new THREE.Fog(0x0d0d2b, 140, 520) : new THREE.Fog(0xefe3cc, 220, 780);
+    scene.background = on ? new THREE.Color(0x0a0a1a) : sc.bg;
+    starsMat.opacity = on ? 0.85 : 0;
+    moon.visible = on;
+    lamps.forEach(l => { l.intensity = on ? 3.5 : 0; });
+    iLamps.forEach(l => { l.intensity = 0; });                              // overhead ring always off at night
+    floorLamps.forEach(l => { l.intensity = on ? 1.0 : 0; });              // Kaaba ground-wash
+    arcadeLamps.forEach(l => { l.intensity = on ? 0.6 : 0; });             // colonnade accent
+    roadGroundLights.forEach(l => { l.intensity = on ? 0.55 : 0; });       // road ivory ground-wash
+    kaabaNightLights.forEach(l => { l.intensity = on ? 1.8 : 0; });        // Kaaba wall-wash
+  };
+
   sc.camOK = p => {
     if (p.y < 0.3) return false;
     const r2 = Math.hypot(p.x, p.z), a = angleOf(p.x, p.z);

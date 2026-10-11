@@ -1,3 +1,6 @@
+<?php
+require_once dirname(__DIR__) . '/includes/config.php';
+?>
 <!doctype html>
 <html lang="bn">
 <head>
@@ -5,12 +8,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16130E">
 <meta name="description" content="Umrah Safar - TravHub Global Limited এর Umrah শেখার সিমুলেটর">
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="<?= BASE_URL ?>/assets/js/simulator/manifest.json">
 <title>Umrah Safar | TravHub Global Limited</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Hind+Siliguri:wght@400;500;600;700&family=Tiro+Bangla&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/simulator/style.css">
 </head>
 <body>
 
@@ -29,6 +32,10 @@
       </div>
       <ol class="steps" id="steps"></ol>
       <div class="hizam-tools">
+        <button class="icon-btn" id="camBtn" title="Toggle camera view">TPV</button>
+        <button class="icon-btn" id="nightBtn" title="Night mode">☀️</button>
+        <button class="icon-btn" id="lightBtn" title="Lightweight mode">⚡</button>
+        <button class="icon-btn" id="clearBtn" title="Clear all data">🗑️</button>
         <button class="icon-btn" id="toolsBtn" title="Tools">☰</button>
         <button class="icon-btn" id="helpBtn">?</button>
         <div class="langs" role="group">
@@ -107,9 +114,11 @@
 <div class="loading" id="loading"><p id="loadMsg">Preparing Masjid al-Haram</p></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="data.js?t=<?php echo time(); ?>"></script>
-<script src="world.js?t=<?php echo time(); ?>"></script>
-<script src="tools.js?t=<?php echo time(); ?>"></script>
-<script src="game.js?t=<?php echo time(); ?>"></script>
+<!-- <script src="https://code.responsivevoice.org/responsivevoice.js?key=FREE" defer></script> -->
+<!-- <script src="<?= BASE_URL ?>/assets/js/anti-inspect.js"></script> -->
+<script src="<?= BASE_URL ?>/assets/js/simulator/data.js?t=<?php echo time(); ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/simulator/world.js?t=<?php echo time(); ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/simulator/tools.js?t=<?php echo time(); ?>"></script>
+<script src="<?= BASE_URL ?>/assets/js/simulator/game.js?t=<?php echo time(); ?>"></script>
 </body>
 </html>

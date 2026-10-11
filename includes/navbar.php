@@ -19,7 +19,14 @@ $curPage = basename($_SERVER['PHP_SELF'], '.php');
       <a href="<?= BASE_URL ?>/pages/package-builder.php" class="nav-link text-sm font-medium text-white/80 hover:text-secondary transition-colors">Custom Builder</a>
       <a href="<?= BASE_URL ?>/pages/hotels.php"          class="nav-link text-sm font-medium text-white/80 hover:text-secondary transition-colors">Hotels</a>
       <a href="<?= BASE_URL ?>/pages/transport.php"       class="nav-link text-sm font-medium text-white/80 hover:text-secondary transition-colors">Transport</a>
-      <a href="<?= BASE_URL ?>/pages/umrah-simulator.php"   class="nav-link text-sm font-medium text-white/80 hover:text-secondary transition-colors" target="_blank">Simulator</a>
+      <div class="relative group">
+        <button class="text-sm font-medium text-white/80 hover:text-secondary transition-colors flex items-center gap-1">
+          Simulator <i data-lucide="chevron-down" class="w-4 h-4"></i>
+        </button>
+        <div class="absolute top-full left-0 mt-2 w-48 bg-navy/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50">
+          <a href="<?= BASE_URL ?>/pages/umrah-simulator.php"   class="block px-4 py-3 text-sm text-white/80 hover:text-secondary hover:bg-white/5 transition-colors" target="_blank">Masjidu'l Haram - Macca</a>
+        </div>
+      </div>
       <div class="relative group">
         <button class="text-sm font-medium text-white/80 hover:text-secondary transition-colors flex items-center gap-1">
           More <i data-lucide="chevron-down" class="w-4 h-4"></i>
